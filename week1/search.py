@@ -144,7 +144,7 @@ def create_query(user_query, filters, sort="_score", sortDir="desc"):
                "filter": filters
             }
          },
-         "boost_mode":"replace",
+         "boost_mode":"multiply",
          "score_mode":"avg",
          "functions":[
             {
