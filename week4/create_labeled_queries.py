@@ -4,10 +4,12 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import numpy as np
 import csv
+import string
 
 # Useful if you want to perform stemming.
 import nltk
 stemmer = nltk.stem.PorterStemmer()
+from nltk.stem.snowball import SnowballStemmer
 
 categories_file_name = r'/workspace/datasets/product_data/categories/categories_0001_abcat0010000_to_pcmcat99300050000.xml'
 
@@ -31,6 +33,14 @@ root_category_id = 'cat00000'
 tree = ET.parse(categories_file_name)
 root = tree.getroot()
 
+def transform_query(query):
+    stemmer = SnowballStemmer('english')
+    query = query.lower()
+    translator = query.maketrans(string.punctuation, ' '*len(string.punctuation))
+    query = query.translate(translator)
+    query = " ".join([stemmer.stem(word) for word in query.split()])
+    return query
+
 # Parse the category XML file to map each category id to its parent category id in a dataframe.
 categories = []
 parents = []
@@ -48,9 +58,20 @@ parents_df = pd.DataFrame(list(zip(categories, parents)), columns =['category', 
 df = pd.read_csv(queries_file_name)[['category', 'query']]
 df = df[df['category'].isin(categories)]
 
-# IMPLEMENT ME: Convert queries to lowercase, and optionally implement other normalization, like stemming.
+# Convert queries to lowercase, and implement other normalization, like stemming.
+df['query'] = df['query'].transform(transform_query)
 
-# IMPLEMENT ME: Roll up categories to ancestors to satisfy the minimum number of queries per category.
+# Roll up categories to ancestors to satisfy the minimum number of queries per category.
+category_counts = df.groupby(['category']).size().reset_index(name='count')
+category_counts = category_counts[category_counts['count'] < min_queries]
+
+while len(category_counts):
+    category_counts = category_counts.merge(parents_df, on = 'category', how = 'left')
+    category_list = category_counts['category'].tolist()
+    parent_list = category_counts['parent'].tolist()
+    df['category'] = df['category'].replace(category_list, parent_list)
+    category_counts = df.groupby(['category']).size().reset_index(name='count')
+    category_counts = category_counts[category_counts['count'] < min_queries]
 
 # Create labels in fastText format.
 df['label'] = '__label__' + df['category']
